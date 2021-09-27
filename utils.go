@@ -2,6 +2,6 @@ package gorkers
 
 import "context"
 
-func StopWhenError(ctx context.Context, in interface{}, err error) error {
+func StopWhenError[I any](ctx context.Context, in I, err error) error {
 	return err
 }

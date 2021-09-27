@@ -13,22 +13,26 @@ import (
 // WorkFunc get input and could put in outChan for followers.
 // ⚠️ outChan could be closed if follower is stoped before producer.
 // error returned can be process by afterFunc but will be ignored by default.
-type WorkFunc func(ctx context.Context, in interface{}, out chan<- interface{}) error
+type WorkFunc[I, O any] func(ctx context.Context, in I, out chan<- O) error
 
-type BeforeFunc func(ctx context.Context) error
-type AfterFunc func(ctx context.Context, in interface{}, err error) error
+type BeforeFunc[I, O any] func(ctx context.Context) error
+type AfterFunc[I, O any] func(ctx context.Context, in I, err error) error
 
-type Runner struct {
+type Out[I any] interface {
+	SetOut(c chan I) error
+}
+
+type Runner[I, O any] struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	inputCtx    context.Context
 	inputCancel context.CancelFunc
-	inChan      chan interface{}
-	outChan     chan interface{}
+	inChan      chan I
+	outChan     chan O
 
-	afterFunc  AfterFunc
-	workFunc   WorkFunc
-	beforeFunc BeforeFunc
+	afterFunc  AfterFunc[I, O]
+	workFunc   WorkFunc[I, O]
+	beforeFunc BeforeFunc[I, O]
 
 	timeout time.Duration
 
@@ -42,18 +46,18 @@ type Runner struct {
 }
 
 // NewRunner Factory function for a new Runner.  The Runner will handle running the workers logic.
-func NewRunner(ctx context.Context, w WorkFunc, maxWorkers, buffer int64) *Runner {
+func NewRunner[I, O any](ctx context.Context, w WorkFunc[I, O], maxWorkers, buffer int64) *Runner[I, O] {
 	runnerCtx, runnerCancel := context.WithCancel(ctx)
 	inputCtx, inputCancel := context.WithCancel(runnerCtx)
 
-	runner := &Runner{
+	runner := &Runner[I, O]{
 		ctx:         runnerCtx,
 		cancel:      runnerCancel,
 		inputCtx:    inputCtx,
 		inputCancel: inputCancel,
-		inChan:      make(chan interface{}, buffer),
+		inChan:      make(chan I, buffer),
 		outChan:     nil,
-		afterFunc:   func(ctx context.Context, in interface{}, err error) error { return nil },
+		afterFunc:   func(ctx context.Context, in I, err error) error { return nil },
 		workFunc:    w,
 		beforeFunc:  func(ctx context.Context) error { return nil },
 		maxWorkers:  maxWorkers,
@@ -66,7 +70,7 @@ func NewRunner(ctx context.Context, w WorkFunc, maxWorkers, buffer int64) *Runne
 var ErrInputClosed = errors.New("input closed")
 
 // Send Send an object to the worker for processing if context is not Done.
-func (r *Runner) Send(in interface{}) error {
+func (r *Runner[I, O]) Send(in I) error {
 	select {
 	case <-r.inputCtx.Done():
 		return ErrInputClosed
@@ -77,7 +81,7 @@ func (r *Runner) Send(in interface{}) error {
 }
 
 // InFrom Set a worker to accept output from another worker(s).
-func (r *Runner) InFrom(w ...*Runner) *Runner {
+func (r *Runner[I, O]) InFrom(w ...Out[I]) *Runner[I, O] {
 	for _, wr := range w {
 		// in := make(chan interface{})
 		// go func(in chan interface{}) {
@@ -93,7 +97,7 @@ func (r *Runner) InFrom(w ...*Runner) *Runner {
 }
 
 // Start execute beforeFunc and launch worker processing.
-func (r *Runner) Start() error {
+func (r *Runner[I, O]) Start() error {
 	r.started.Do(func() {
 		if err := r.beforeFunc(r.ctx); err == nil {
 			go r.work()
@@ -103,7 +107,7 @@ func (r *Runner) Start() error {
 }
 
 // BeforeFunc Function to be run before worker starts processing.
-func (r *Runner) BeforeFunc(f BeforeFunc) *Runner {
+func (r *Runner[I, O]) BeforeFunc(f BeforeFunc[I, O]) *Runner[I, O] {
 	r.beforeFunc = f
 	return r
 }
@@ -113,7 +117,7 @@ func (r *Runner) BeforeFunc(f BeforeFunc) *Runner {
 // input can be retreive with context value:
 //   ctx.Value(workers.InputKey{})
 // ⚠️ If an error is returned it stop Runner execution.
-func (r *Runner) AfterFunc(f AfterFunc) *Runner {
+func (r *Runner[I, O]) AfterFunc(f AfterFunc[I, O]) *Runner[I, O] {
 	r.afterFunc = f
 	return r
 }
@@ -121,7 +125,7 @@ func (r *Runner) AfterFunc(f AfterFunc) *Runner {
 var ErrOutAlready = errors.New("out already set")
 
 // SetOut Allows the setting of a workers out channel, if not already set.
-func (r *Runner) SetOut(c chan interface{}) error {
+func (r *Runner[I, O]) SetOut(c chan O) error {
 	if r.outChan != nil {
 		return ErrOutAlready
 	}
@@ -131,20 +135,20 @@ func (r *Runner) SetOut(c chan interface{}) error {
 
 // SetDeadline allows a time to be set when the Runner should stop.
 // ⚠️ Should only be called before Start
-func (r *Runner) SetDeadline(t time.Time) *Runner {
+func (r *Runner[I, O]) SetDeadline(t time.Time) *Runner[I, O] {
 	r.ctx, r.cancel = context.WithDeadline(r.ctx, t)
 	return r
 }
 
 // SetWorkerTimeout allows a time duration to be set when the workers should stop.
 // ⚠️ Should only be called before Start
-func (r *Runner) SetWorkerTimeout(duration time.Duration) *Runner {
+func (r *Runner[I, O]) SetWorkerTimeout(duration time.Duration) *Runner[I, O] {
 	r.timeout = duration
 	return r
 }
 
 // Wait close the input channel and waits it to drain and process.
-func (r *Runner) Wait() *Runner {
+func (r *Runner[I, O]) Wait() *Runner[I, O] {
 	if r.inputCtx.Err() == nil {
 		r.inputCancel()
 		close(r.inChan)
@@ -156,14 +160,14 @@ func (r *Runner) Wait() *Runner {
 }
 
 // Stop Stops the processing of a worker and waits for workers to finish.
-func (r *Runner) Stop() *Runner {
+func (r *Runner[I, O]) Stop() *Runner[I, O] {
 	r.cancel()
 	r.Wait()
 	return r
 }
 
 // work starts processing input and limits worker instance number.
-func (r *Runner) work() {
+func (r *Runner[I, O]) work() {
 	var wg sync.WaitGroup
 
 	sem := semaphore.NewWeighted(r.maxWorkers)
@@ -215,10 +219,10 @@ func (r *Runner) work() {
 	}
 }
 
-func (r *Runner) Metrics() (send, ok, fail uint32) {
+func (r *Runner[I, O]) Metrics() (send, ok, fail uint32) {
 	return r.metricSend, r.metricOK, r.metricFail
 }
 
-func (r *Runner) Fail() bool {
+func (r *Runner[I, O]) Fail() bool {
 	return r.metricFail != 0
 }
