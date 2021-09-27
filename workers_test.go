@@ -43,10 +43,10 @@ func (wo *WorkerOne) CurrentCount() int {
 	return int(wo.Count)
 }
 
-func (wo *WorkerOne) Work(ctx context.Context, in interface{}, out chan<- interface{}) error {
+func (wo *WorkerOne) Work(ctx context.Context, in int, out chan<- int) error {
 	atomic.AddInt32(&wo.Count, 1)
 
-	total := in.(int) * 2
+	total := in * 2
 	out <- total
 	return nil
 }
@@ -55,7 +55,7 @@ func (wt *WorkerTwo) CurrentCount() int {
 	return int(wt.Count)
 }
 
-func (wt *WorkerTwo) Work(ctx context.Context, in interface{}, out chan<- interface{}) error {
+func (wt *WorkerTwo) Work(ctx context.Context, in int, out chan<- int) error {
 	atomic.AddInt32(&wt.Count, 1)
 	return nil
 }
@@ -67,26 +67,26 @@ var (
 	workerTestScenarios = []workerTest{
 		{
 			name:       "work basic",
-			worker:     NewTestWorkerObject(workBasic()),
+			worker:     workBasic(),
 			numWorkers: workerCount,
 			buffer:     bufferCount,
 		},
 		{
 			name:       "work basic with timeout",
 			timeout:    workerTimeout,
-			worker:     NewTestWorkerObject(workBasic()),
+			worker:     workBasic(),
 			numWorkers: workerCount,
 			buffer:     bufferCount,
 		},
 		{
 			name:       "work basic with deadline",
 			deadline:   deadline,
-			worker:     NewTestWorkerObject(workBasic()),
+			worker:     workBasic(),
 			numWorkers: workerCount,
 		},
 		{
 			name:        "work with return of error",
-			worker:      NewTestWorkerObject(workWithError(err)),
+			worker:      workWithError(err),
 			errExpected: true,
 			numWorkers:  workerCount,
 			buffer:      bufferCount,
@@ -94,7 +94,7 @@ var (
 		{
 			name:        "work with return of error with timeout",
 			timeout:     workerTimeout,
-			worker:      NewTestWorkerObject(workWithError(err)),
+			worker:      workWithError(err),
 			errExpected: true,
 			numWorkers:  workerCount,
 			buffer:      bufferCount,
@@ -102,14 +102,14 @@ var (
 		{
 			name:        "work with return of error with deadline",
 			deadline:    deadline,
-			worker:      NewTestWorkerObject(workWithError(err)),
+			worker:      workWithError(err),
 			errExpected: true,
 			numWorkers:  workerCount,
 			buffer:      bufferCount,
 		},
 	}
 
-	getWorker = func(ctx context.Context, wt workerTest) *gorkers.Runner {
+	getWorker = func(ctx context.Context, wt workerTest) *gorkers.Runner[int, int] {
 		worker := gorkers.NewRunner(ctx, wt.worker, wt.numWorkers, wt.buffer)
 		if wt.timeout > 0 {
 			worker.SetWorkerTimeout(wt.timeout)
@@ -125,47 +125,44 @@ type workerTest struct {
 	name        string
 	timeout     time.Duration
 	deadline    func() time.Time
-	worker      gorkers.WorkFunc
+	worker      gorkers.WorkFunc[int, int]
 	numWorkers  int64
 	buffer      int64
 	testSignal  bool
 	errExpected bool
 }
 
-type TestWorkerObject struct {
-	workFunc func(ctx context.Context, in interface{}, out chan<- interface{}) error
+type TestWorkerObject[I, O any] struct {
+	workFunc func(ctx context.Context, in I, out chan<- O) error
 }
 
-func NewTestWorkerObject(wf func(ctx context.Context, in interface{}, out chan<- interface{}) error) gorkers.WorkFunc {
+func NewTestWorkerObject[I, O any](wf func(ctx context.Context, in I, out chan<- O) error) gorkers.WorkFunc[I, O] {
 	return wf
 }
 
-func (tw *TestWorkerObject) Work(ctx context.Context, in interface{}, out chan<- interface{}) error {
+func (tw *TestWorkerObject[I, O]) Work(ctx context.Context, in I, out chan<- O) error {
 	return tw.workFunc(ctx, in, out)
 }
 
-func workBasicNoOut() func(ctx context.Context, in interface{}, out chan<- interface{}) error {
-	return func(ctx context.Context, in interface{}, out chan<- interface{}) error {
-		_ = in.(int)
+func workBasicNoOut() func(ctx context.Context, in int, out chan<- int) error {
+	return func(ctx context.Context, in int, out chan<- int) error {
 		return nil
 	}
 }
 
-func workBasic() func(ctx context.Context, in interface{}, out chan<- interface{}) error {
-	return func(ctx context.Context, in interface{}, out chan<- interface{}) error {
-		i := in.(int)
-		out <- i
+func workBasic() func(ctx context.Context, in int, out chan<- int) error {
+	return func(ctx context.Context, in int, out chan<- int) error {
+		out <- in
 		return nil
 	}
 }
 
-func workWithError(err error) func(ctx context.Context, in interface{}, out chan<- interface{}) error {
-	return func(ctx context.Context, in interface{}, out chan<- interface{}) error {
-		i := in.(int)
-		total := i * rand.Intn(1000)
-		if i == 100 {
+func workWithError(err error) func(ctx context.Context, in int, out chan<- int) error {
+	return func(ctx context.Context, in int, out chan<- int) error {
+		if in == 100 {
 			return err
 		}
+		total := in * rand.Intn(1000)
 		out <- total
 		return nil
 	}
@@ -186,7 +183,7 @@ func TestWorkers(t *testing.T) {
 			// always need a consumer for the out tests so using basic here.
 			workerTwo := gorkers.NewRunner(ctx, NewTestWorkerObject(workBasicNoOut()), workerCount, bufferCount).InFrom(workerOne)
 
-			workerOne.AfterFunc(gorkers.StopWhenError)
+			workerOne.AfterFunc(gorkers.StopWhenError[int])
 
 			if err := workerOne.Start(); err != nil && !tt.errExpected {
 				t.Error(err)
@@ -307,7 +304,7 @@ func TestWorkersFinish1000000(t *testing.T) {
 }
 
 func BenchmarkGoWorkers1to1(b *testing.B) {
-	worker := gorkers.NewRunner(context.Background(), NewTestWorkerObject(workBasicNoOut()), 1000, 2000)
+	worker := gorkers.NewRunner(context.Background(), workBasicNoOut(), 1000, 2000)
 	worker.Start()
 
 	b.ResetTimer()
@@ -323,7 +320,7 @@ func BenchmarkGoWorkers1to1(b *testing.B) {
 
 func Benchmark100GoWorkers(b *testing.B) {
 	b.ReportAllocs()
-	worker := gorkers.NewRunner(context.Background(), NewTestWorkerObject(workBasicNoOut()), 100, 200)
+	worker := gorkers.NewRunner(context.Background(), workBasicNoOut(), 100, 200)
 	worker.Start()
 
 	b.ResetTimer()
@@ -336,7 +333,7 @@ func Benchmark100GoWorkers(b *testing.B) {
 
 func Benchmark1000GoWorkers(b *testing.B) {
 	b.ReportAllocs()
-	worker := gorkers.NewRunner(context.Background(), NewTestWorkerObject(workBasicNoOut()), 1000, 500)
+	worker := gorkers.NewRunner(context.Background(), workBasicNoOut(), 1000, 500)
 	worker.Start()
 
 	b.ResetTimer()
@@ -349,7 +346,7 @@ func Benchmark1000GoWorkers(b *testing.B) {
 
 func Benchmark10000GoWorkers(b *testing.B) {
 	b.ReportAllocs()
-	worker := gorkers.NewRunner(context.Background(), NewTestWorkerObject(workBasicNoOut()), 10000, 5000)
+	worker := gorkers.NewRunner(context.Background(), workBasicNoOut(), 10000, 5000)
 	worker.Start()
 
 	b.ResetTimer()
