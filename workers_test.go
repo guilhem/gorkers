@@ -179,6 +179,8 @@ func TestWorkers(t *testing.T) {
 			// always need a consumer for the out tests so using basic here.
 			workerTwo := gorkers.NewRunner(ctx, NewTestWorkerObject(workBasicNoOut()), workerCount, workerCount).InFrom(workerOne)
 
+			workerOne.AfterFunc(gorkers.StopWhenError)
+
 			if err := workerOne.Start(); err != nil && !tt.errExpected {
 				t.Error(err)
 			}

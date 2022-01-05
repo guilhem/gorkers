@@ -73,6 +73,15 @@ runner.Close()
 
 Use `.Close()` to prevent any new job to be spawn and sending a context cancellation to any worker.
 
+### Stop on errors
+
+`StopWhenError` is a special function to stop Runner when 1 task return an error.
+
+```go
+runner.AfterFunc(gorkers.StopWhenError)
+runner.Start()
+```
+
 ## Working With Multiple Workers
 
 ### Passing work form one worker to the next
