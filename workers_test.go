@@ -196,7 +196,9 @@ func TestWorkers(t *testing.T) {
 			}
 
 			for i := 0; i < runTimes; i++ {
-				workerOne.Send(i)
+				if err := workerOne.Send(i); err != nil && !tt.errExpected {
+					t.Error("fail to send data")
+				}
 			}
 
 			workerOne.Wait().Stop()
@@ -204,7 +206,7 @@ func TestWorkers(t *testing.T) {
 
 			w1s, w1ok, w1f := workerOne.Metrics()
 
-			if w1s != runTimes || w1ok+w1f != w1s {
+			if w1ok+w1f != w1s && !tt.errExpected {
 				t.Error("everything hasn't been process")
 			}
 
