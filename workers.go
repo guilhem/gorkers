@@ -170,6 +170,7 @@ func (r *Runner) work() {
 
 	defer func() {
 		wg.Wait()
+		r.inputCancel()
 		r.cancel()
 		close(r.done)
 	}()
