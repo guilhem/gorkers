@@ -82,6 +82,21 @@ runner.AfterFunc(gorkers.StopWhenError)
 runner.Start()
 ```
 
+### Log errors
+
+By default errors are ignored.
+To manage them you can use `AfterFunc` this way:
+
+```go
+logf := func(ctx context.Context, in interface{}, err error) error {
+    if err != nil {
+        log.Printf("err: %s", err)
+    }
+    return nil
+}
+runner.AfterFunc(logf)
+```
+
 ## Working With Multiple Workers
 
 ### Passing work form one worker to the next
