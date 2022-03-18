@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
@@ -15,6 +12,7 @@ func main() {
 	ctx := context.Background()
 
 	timeoutWorker := gorkers.NewRunner(ctx, work, 10, 10).SetWorkerTimeout(100 * time.Millisecond)
+	timeoutWorker.AfterFunc(gorkers.StopWhenError[string])
 	err := timeoutWorker.Start()
 	if err != nil {
 		fmt.Println(err)
@@ -27,8 +25,13 @@ func main() {
 	timeoutWorker.Wait().Stop()
 }
 
-func work(ctx context.Context, in interface{}, out chan<- interface{}) error {
+func work(ctx context.Context, in string, out chan<- interface{}) error {
 	fmt.Println(in)
-	time.Sleep(1 * time.Second)
+	select {
+	case <-time.After(1 * time.Second):
+		fmt.Println("overslept")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	return nil
 }

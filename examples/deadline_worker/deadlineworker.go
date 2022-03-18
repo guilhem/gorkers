@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
@@ -36,7 +33,7 @@ func NewDeadlineWorker() *DeadlineWorker {
 	return &DeadlineWorker{}
 }
 
-func (dlw *DeadlineWorker) Work(_ context.Context, in interface{}, out chan<- interface{}) error {
+func (dlw *DeadlineWorker) Work(_ context.Context, in string, out chan<- interface{}) error {
 	fmt.Println(in)
 	time.Sleep(1 * time.Second)
 	return nil
