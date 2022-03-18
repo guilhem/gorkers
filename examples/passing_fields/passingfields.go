@@ -1,11 +1,9 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 
 	"github.com/guilhem/gorkers"
@@ -20,12 +18,13 @@ func main() {
 	}
 
 	if err := workerTwo.Start(); err != nil {
-		fmt.Println(err)
+		log.Panic(err)
 	}
 
 	for i := 0; i < 15; i++ {
 		workerOne.Send(rand.Intn(100))
 	}
+
 	workerOne.Wait().Stop()
 	workerTwo.Wait().Stop()
 }
@@ -49,15 +48,15 @@ func NewWorkerTwo(amountToMultiply int) *WorkerTwo {
 	}
 }
 
-func (wo *WorkerOne) Work(ctx context.Context, in interface{}, out chan<- interface{}) error {
-	total := in.(int) * wo.amountToMultiply
-	fmt.Println("worker1", fmt.Sprintf("%d * %d = %d", in.(int), wo.amountToMultiply, total))
+func (wo *WorkerOne) Work(ctx context.Context, in int, out chan<- int) error {
+	total := in * wo.amountToMultiply
+	fmt.Println("worker1", fmt.Sprintf("%d * %d = %d", in, wo.amountToMultiply, total))
 	out <- total
 	return nil
 }
 
-func (wt *WorkerTwo) Work(ctx context.Context, in interface{}, out chan<- interface{}) error {
-	totalFromWorkerOne := in.(int)
+func (wt *WorkerTwo) Work(ctx context.Context, in int, out chan<- interface{}) error {
+	totalFromWorkerOne := in
 	fmt.Println("worker2", fmt.Sprintf("%d * %d = %d", totalFromWorkerOne, wt.amountToMultiply, totalFromWorkerOne*wt.amountToMultiply))
 	return nil
 }

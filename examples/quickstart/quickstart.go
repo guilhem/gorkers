@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
@@ -31,8 +28,8 @@ func main() {
 	fmt.Printf("total time %dms\n", totalTime)
 }
 
-func work(ctx context.Context, in interface{}, out chan<- interface{}) error {
-	total := in.(int) * 2
-	fmt.Println(fmt.Sprintf("%d * 2 = %d", in.(int), total))
+func work(ctx context.Context, in int, out chan<- interface{}) error {
+	total := in * 2
+	fmt.Println(fmt.Sprintf("%d * 2 = %d", in, total))
 	return nil
 }
