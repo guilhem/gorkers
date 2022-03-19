@@ -2,17 +2,18 @@
 
 <!-- [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#goroutines) -->
 
-<!-- [![Maintainability](https://api.codeclimate.com/v1/badges/402fee86fbd1e24defb2/maintainability)](https://codeclimate.com/github/catmullet/go-workers/maintainability) -->
-
+[![Maintainability](https://api.codeclimate.com/v1/badges/b02f27021681125147d5/maintainability)](https://codeclimate.com/github/guilhem/gorkers/maintainability)
 [![CodeQL](https://github.com/guilhem/gorkers/workflows/CodeQL/badge.svg)](https://github.com/guilhem/gorkers/actions?query=workflow%3ACodeQL)
 [![GoCover](http://gocover.io/_badge/github.com/guilhem/gorkers)](http://gocover.io/github.com/guilhem/gorkers)
 [![Go Reference](https://pkg.go.dev/badge/github.com/guilhem/gorkers.svg)](https://pkg.go.dev/github.com/guilhem/gorkers)
 
 ## Examples
 
-- [Quickstart](https://github.com/guilhem/gorkers/blob/master/examples/quickstart/quickstart.go)
-- [Multiple Go Workers](https://github.com/guilhem/gorkers/blob/master/examples/multiple_workers/multipleworkers.go)
-- [Passing Fields](https://github.com/guilhem/gorkers/blob/master/examples/passing_fields/passingfields.go)
+- [Quickstart](examples/quickstart/quickstart.go)
+- [Multiple Go Workers](examples/multiple_workers/multipleworkers.go)
+- [Passing Fields](examples/passing_fields/passingfields.go)
+- [Timeout Worker](examples/timeout_worker/timeoutworker.go)
+- [Deadline Worker](examples/deadline_worker/deadlineworker.go)
 
 ## Getting Started
 
@@ -26,8 +27,12 @@ import (
 
 ### Create a worker function 👷
 
+Starting from 0.2, _gorkers_ use go1.18 generics ❤️
+
+Define, your in and out type and create your worker:
+
 ```go
-work := func (ctx context.Context, in interface{}, out chan<- interface{}) error {
+work := func(ctx context.Context, in string, out chan<- int) error {
     // work iteration here
 }
 ```
